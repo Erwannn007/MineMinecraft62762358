@@ -62,6 +62,7 @@ export const DEFAULT_SETTINGS = {
   touch: 'auto', // auto | on | off
   mobs: true,
   clouds: true,
+  bubble: true,
 };
 
 export function loadSettings() {

@@ -38,6 +38,10 @@ export class Renderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false });
     this.caches = new Map();
+    this.bcaches = new Map(); // caches coupés pour la bulle de vision
+    this.bubbleCanvas = document.createElement('canvas');
+    this.bubble = null;
+    this.softCut = false;
     this.pool = [];
     this.cutZ = null;
     this.W = 1; this.H = 1;
@@ -55,17 +59,22 @@ export class Renderer {
     this.canvas.style.width = (W * zoom) / dpr + 'px';
     this.canvas.style.height = (H * zoom) / dpr + 'px';
     this.lightCanvas.width = W; this.lightCanvas.height = H;
+    this.bubbleCanvas.width = W; this.bubbleCanvas.height = H;
     this.ctx.imageSmoothingEnabled = false;
     this.scale = zoom / dpr; // pixels CSS par pixel interne
   }
 
   setWorld(world) {
-    for (const c of this.caches.values()) this.release(c);
-    this.caches.clear();
+    for (const store of [this.caches, this.bcaches]) {
+      for (const c of store.values()) this.release(c);
+      store.clear();
+    }
     this.world = world;
     world.onChange((cx, cy) => {
-      const c = this.caches.get(cx + ',' + cy);
+      const k = cx + ',' + cy;
+      const c = this.caches.get(k), b = this.bcaches.get(k);
       if (c) c.stale = true;
+      if (b) b.stale = true;
     });
   }
 
@@ -76,14 +85,14 @@ export class Renderer {
     const cut = this.cutZ;
     let m = 0;
     const above = z + 1 < WH ? get(x, y, z + 1) : 0;
-    if (cut !== null && z + 1 >= cut) m |= above !== 0 && above !== 255 && !IS_CROSS[above] ? 8 : 4;
+    if (cut !== null && z + 1 >= cut) m |= above !== 0 && above !== 255 && !IS_CROSS[above] && !this.softCut ? 8 : 4;
     else if (!occludes(id, above)) m |= 4;
     if (!occludes(id, get(x, y + 1, z))) m |= 1;
     if (!occludes(id, get(x + 1, y, z))) m |= 2;
     return m;
   }
 
-  buildCache(ch) {
+  buildCache(ch, store = this.caches) {
     const world = this.world;
     const data = ch.data;
     const x0 = ch.cx * 16, y0 = ch.cy * 16;
@@ -120,8 +129,8 @@ export class Renderer {
         }
       }
     }
-    let cache = this.caches.get(ch.cx + ',' + ch.cy);
-    if (!cache) { cache = {}; this.caches.set(ch.cx + ',' + ch.cy, cache); }
+    let cache = store.get(ch.cx + ',' + ch.cy);
+    if (!cache) { cache = {}; store.set(ch.cx + ',' + ch.cy, cache); }
     cache.cx = ch.cx; cache.cy = ch.cy;
     cache.stale = false; cache.cut = cut; cache.lights = lights;
     if (n === 0) { this.release(cache); cache.empty = true; return cache; }
@@ -269,6 +278,57 @@ export class Renderer {
       }
     }
 
+    // --- bulle de vision : tout ce qui dépasse la tête du joueur est retiré dans un cercle ---
+    this.bubble = null;
+    const bub = view.bubble;
+    if (bub && bub.alpha > 0.01 && this.cutZ === null) {
+      const [bx, by] = project(bub.x, bub.y, bub.z + 0.9);
+      const cx = bx + ox, cy = by + oy, R = bub.r;
+      const bc = this.bubbleCanvas, bg = bc.getContext('2d');
+      bg.imageSmoothingEnabled = false;
+      bg.globalCompositeOperation = 'source-over';
+      bg.globalAlpha = 1;
+      bg.clearRect(0, 0, W, H);
+      bg.fillStyle = view.bg || '#10121a';
+      bg.fillRect(cx - R, cy - R, R * 2, R * 2);
+      this.cutZ = bub.cutZ;
+      this.softCut = true;
+      for (const v of vis) {
+        const [vcx, vcy] = v;
+        let c = this.bcaches.get(vcx + ',' + vcy);
+        let x0, y0, x1, y1;
+        if (c && !c.empty && c.canvas) { x0 = c.x; y0 = c.y; x1 = c.x + c.w; y1 = c.y + c.h; }
+        else {
+          x0 = (vcx * 16 - vcy * 16 - 16) * 16 - 16; x1 = (vcx * 16 + 16 - vcy * 16) * 16 + 16;
+          y0 = (vcx + vcy) * 128 - WH * 16; y1 = ((vcx + vcy) * 16 + 32) * 8;
+        }
+        if (x1 + ox < cx - R || x0 + ox > cx + R || y1 + oy < cy - R || y0 + oy > cy + R) continue;
+        if (!c || c.stale || c.cut !== bub.cutZ) {
+          const ch = world.getChunk(vcx, vcy);
+          const ready = ch && world.getChunk(vcx + 1, vcy) && world.getChunk(vcx, vcy + 1);
+          if (ready && (!c || performance.now() - t0 < budget + 4)) c = this.buildCache(ch, this.bcaches);
+        }
+        if (c && !c.empty && c.canvas) bg.drawImage(c.canvas, c.x + ox, c.y + oy);
+      }
+      for (const e of ents) {
+        e.draw(bg, ox, oy);
+        this.redrawFront(bg, e, ox, oy);
+      }
+      this.cutZ = null;
+      this.softCut = false;
+      bg.globalCompositeOperation = 'destination-in';
+      const gr = bg.createRadialGradient(cx, cy, R * 0.6, cx, cy, R);
+      gr.addColorStop(0, 'rgba(0,0,0,1)');
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      bg.fillStyle = gr;
+      bg.fillRect(0, 0, W, H);
+      bg.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = bub.alpha;
+      ctx.drawImage(bc, 0, 0);
+      ctx.globalAlpha = 1;
+      this.bubble = { cx, cy, r: R, z: bub.cutZ, alpha: bub.alpha };
+    }
+
     // --- bloc visé ---
     if (view.target) {
       const [x, y, z] = view.target;
@@ -332,14 +392,19 @@ export class Renderer {
 
   // Libère les caches hors de l'écran.
   trim(maxCaches = 90) {
-    if (this.caches.size <= maxCaches) return;
+    this.trimStore(this.caches, maxCaches);
+    this.trimStore(this.bcaches, 36);
+  }
+
+  trimStore(store, max) {
+    if (store.size <= max) return;
     const fx = this.focusCx || 0, fy = this.focusCy || 0;
-    const arr = [...this.caches.entries()].sort((a, b) =>
+    const arr = [...store.entries()].sort((a, b) =>
       (Math.abs(b[1].cx - fx) + Math.abs(b[1].cy - fy)) - (Math.abs(a[1].cx - fx) + Math.abs(a[1].cy - fy)));
-    while (this.caches.size > maxCaches && arr.length) {
+    while (store.size > max && arr.length) {
       const [k, c] = arr.shift();
       this.release(c);
-      this.caches.delete(k);
+      store.delete(k);
     }
   }
 
@@ -347,7 +412,10 @@ export class Renderer {
   pick(sx, sy, filter) {
     const world = this.world;
     const X = sx - this.ox, Y = sy - this.oy;
-    const z0 = (this.cutZ !== null ? this.cutZ : WH) + 0.001;
+    let cut = this.cutZ;
+    const b = this.bubble;
+    if (cut === null && b && b.alpha > 0.5 && Math.hypot(sx - b.cx, sy - b.cy) < b.r * 0.8) cut = b.z;
+    const z0 = (cut !== null ? cut : WH) + 0.001;
     const s = (Y + 16 * z0) / 8, d = X / 16;
     let x = (s + d) / 2, y = (s - d) / 2, z = z0;
     let ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
@@ -355,7 +423,7 @@ export class Renderer {
     let face = 'top';
     for (let i = 0; i < 3 * WH + 10; i++) {
       if (iz < 0) return null;
-      if (iz < WH && (this.cutZ === null || iz < this.cutZ)) {
+      if (iz < WH && (cut === null || iz < cut)) {
         const id = world.getBlock(ix, iy, iz);
         if (id === 255) return null;
         if (id !== 0 && (!filter || filter(id, ix, iy, iz))) return { x: ix, y: iy, z: iz, id, face };

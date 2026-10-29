@@ -49,6 +49,7 @@ export class Input {
         else if (code === 'Escape') this.emit('pause');
         else if (code === 'KeyQ' && !this.uiOpen()) this.emit('drop', e.ctrlKey);
         else if (code === 'KeyF') this.emit('fly');
+        else if (code === 'KeyV') this.emit('bubble');
         else if (code === 'F3' || code === 'KeyP') this.emit('debug');
         else if (code.startsWith('Digit')) {
           const n = Number(code.slice(5));

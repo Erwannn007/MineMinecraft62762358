@@ -19,6 +19,7 @@ et marche hors ligne.
 | Jeter l'objet | Q | Bouton ⤓ | X / croix ↓ |
 | Voler (créatif) | F | Bouton ailes | Croix ↑ |
 | Sprint | Ctrl | Joystick à fond | L3 |
+| Bulle de vision on/off | V | Options | Options |
 | Pause | Échap | Bouton ‖ | Start |
 | Zoom | Ctrl + molette | Options | Options |
 

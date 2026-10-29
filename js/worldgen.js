@@ -164,7 +164,7 @@ export class WorldGen {
     }
 
     // --- arbres (y compris ceux des chunks voisins qui débordent ici) ---
-    const G = 5;
+    const G = 6;
     const gx0 = Math.floor((x0 - 3) / G), gx1 = Math.floor((x0 + CS + 3) / G);
     const gy0 = Math.floor((y0 - 3) / G), gy1 = Math.floor((y0 + CS + 3) / G);
     for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
@@ -175,9 +175,9 @@ export class WorldGen {
       const { h, biome } = col;
       if (h < SEA + 1 || h > WH - 12) continue;
       let p = 0;
-      if (biome === BIOME.FOREST) p = 0.7;
-      else if (biome === BIOME.BIRCH) p = 0.65;
-      else if (biome === BIOME.SNOW) p = 0.3;
+      if (biome === BIOME.FOREST) p = 0.45;
+      else if (biome === BIOME.BIRCH) p = 0.4;
+      else if (biome === BIOME.SNOW) p = 0.18;
       else if (biome === BIOME.PLAINS) p = 0.035;
       else if (biome === BIOME.MOUNTAIN && h < SEA + 26) p = 0.08;
       const r = hash2(seed + 23, gx, gy);
@@ -205,7 +205,7 @@ export class WorldGen {
     };
     const rr = mulberry32(r * 4294967296);
     if (kind === 'spruce') {
-      const th = 6 + Math.floor(rr() * 3);
+      const th = 5 + Math.floor(rr() * 2);
       const top = base + th;
       put(tx, ty, top, B.SPRUCE_LEAVES);
       let rad = 0;
@@ -222,7 +222,7 @@ export class WorldGen {
     }
     const log = kind === 'birch' ? B.BIRCH_LOG : B.OAK_LOG;
     const leaf = kind === 'birch' ? B.BIRCH_LEAVES : B.OAK_LEAVES;
-    const th = (kind === 'birch' ? 5 : 4) + Math.floor(rr() * 3);
+    const th = (kind === 'birch' ? 5 : 4) + Math.floor(rr() * 2);
     const top = base + th - 1;
     for (let z = top - 2; z <= top + 1; z++) {
       const rad = z >= top ? 1 : 2;

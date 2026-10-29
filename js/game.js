@@ -30,6 +30,8 @@ export class Game {
     this.saveTimer = 15;
     this.unloadTimer = 5;
     this.cut = { on: false, t: 0, z: null };
+    this.bubbleAlpha = 0;
+    this.bubbleZ = null;
     this.rng = mulberry32(Date.now() & 0xffffff);
     this.debug = false;
     this.stepDist = 0;
@@ -453,6 +455,11 @@ export class Game {
         }
         break;
       case 'debug': this.debug = !this.debug; break;
+      case 'bubble':
+        this.app.settings.bubble = !this.app.settings.bubble;
+        this.app.applySettings();
+        ui.toast('Bulle de vision : ' + (this.app.settings.bubble ? 'OUI' : 'NON'), 1200);
+        break;
       case 'zoom': this.app.changeZoom(ev.data); break;
       case 'joy': ui.updateJoy(ev.data); break;
       case 'pick': {
@@ -637,6 +644,28 @@ export class Game {
     return Math.min(1, Math.max(0, (thick - 2) / 5));
   }
 
+  // Bulle de vision : s'active quand des blocs au-dessus du joueur le cachent à la caméra.
+  updateBubble(dt) {
+    const p = this.player, w = this.world;
+    const z0 = Math.floor(p.z + 0.1);
+    if (this.bubbleZ === null || p.onGround || p.inWater || p.flying) this.bubbleZ = z0 + 2;
+    let hidden = false;
+    if (this.app.settings.bubble && !this.cut.on && !p.dead) {
+      const px = Math.floor(p.x), py = Math.floor(p.y), bz = this.bubbleZ;
+      // blocs le long de la ligne de vue (direction +x +y +z), autour du joueur
+      for (let i = 0; i <= 8 && !hidden; i++) {
+        for (let dy = -2; dy <= 2 && !hidden; dy++) for (let dx = -2; dx <= 2 && !hidden; dx++) {
+          for (let z = Math.max(bz, z0 + i - 1); z <= z0 + i + 3 && z < WH; z++) {
+            const id = w.getBlock(px + i + dx, py + i + dy, z);
+            if (id !== 0 && id !== 255 && !BLOCKS[id].cross && id !== B.WATER) { hidden = true; break; }
+          }
+        }
+      }
+    }
+    this.bubbleAlpha += ((hidden ? 1 : 0) - this.bubbleAlpha) * Math.min(1, dt * (hidden ? 8 : 3));
+    if (this.bubbleAlpha < 0.01) this.bubbleAlpha = 0;
+  }
+
   render(dt) {
     const app = this.app, p = this.player, r = app.renderer;
     const k = Math.min(1, dt * 10);
@@ -644,6 +673,8 @@ export class Game {
     this.cam[1] += (p.y - this.cam[1]) * k;
     this.cam[2] += (p.z + 0.9 - this.cam[2]) * k;
     const cave = this.updateCut(dt);
+    this.updateBubble(dt);
+    const rb = Math.max(64, Math.min(120, Math.min(r.W, r.H) * 0.3));
     const dayDark = this.dayDarkness();
     const dark = Math.max(dayDark, cave * 0.74);
     const ents = [];
@@ -671,6 +702,7 @@ export class Game {
       time: performance.now() / 1000,
       clouds: app.settings.clouds && !this.cut.on ? 0.11 * (1 - dayDark) : 0,
       bg: this.cut.on ? '#050507' : '#10121a',
+      bubble: this.bubbleAlpha > 0 ? { x: p.x, y: p.y, z: p.z, cutZ: this.bubbleZ, r: rb, alpha: this.bubbleAlpha } : null,
     });
   }
 

@@ -461,6 +461,7 @@ export class UI {
       ['zoom', () => 'Zoom : ' + (s.zoom === 0 ? 'Auto' : 'x' + s.zoom), () => set('zoom', (s.zoom + 1) % 7)],
       ['volume', () => 'Son : ' + (s.volume === 0 ? 'Coupé' : Math.round(s.volume * 100) + '%'), () => set('volume', s.volume >= 1 ? 0 : Math.round((s.volume + 0.1) * 10) / 10)],
       ['autoJump', () => 'Saut automatique : ' + (s.autoJump ? 'OUI' : 'NON'), () => set('autoJump', !s.autoJump)],
+      ['bubble', () => 'Bulle de vision : ' + (s.bubble ? 'OUI' : 'NON'), () => set('bubble', !s.bubble)],
       ['mobs', () => 'Monstres la nuit : ' + (s.mobs ? 'OUI' : 'NON'), () => set('mobs', !s.mobs)],
       ['clouds', () => 'Ombres des nuages : ' + (s.clouds ? 'OUI' : 'NON'), () => set('clouds', !s.clouds)],
       ['showCoords', () => 'Coordonnées : ' + (s.showCoords ? 'OUI' : 'NON'), () => set('showCoords', !s.showCoords)],
