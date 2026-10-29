@@ -150,13 +150,15 @@ export class Renderer {
   }
 
   // Redessine les blocs situés devant une entité (pour qu'elle soit correctement cachée).
+  // Le dessin est limité au rectangle de l'entité et fait dans l'ordre du peintre,
+  // sinon les blocs redessinés débordent et abîment le décor autour.
   redrawFront(ctx, e, ox, oy) {
     const world = this.world;
     const [l, t, r, b] = e.rect;
     const eDepth = e.x + e.y + e.z + e.height * 0.5;
     const zEnd = this.cutZ !== null ? Math.min(WH, this.cutZ) : WH;
     const get = (x, y, z) => world.getBlock(x, y, z);
-    let covered = false;
+    const todo = [];
     for (let z = Math.floor(e.z + 0.05); z < zEnd; z++) {
       const sMin = Math.floor((t + (z + 1) * 16 - 32) / 8), sMax = Math.ceil((b + (z + 1) * 16) / 8);
       const dMin = Math.floor((l - 16) / 16), dMax = Math.ceil((r + 16) / 16);
@@ -166,19 +168,32 @@ export class Renderer {
           const x = (s + d) / 2, y = (s - d) / 2;
           const id = get(x, y, z);
           if (id === 0 || id === 255) continue;
+          // l'eau, le verre et la glace sont translucides : les redessiner doublerait leur opacité
+          if (!IS_OPAQUE[id] && !IS_CROSS[id]) continue;
           if (x + y + 1 + z + 0.5 <= eDepth || z + 1 <= e.z + 0.05) continue;
-          const X = (x - y) * 16 - 16 + ox, Y = (x + y) * 8 - (z + 1) * 16 + oy;
-          if (IS_CROSS[id]) { ctx.drawImage(atlas, 0, id * CELL, CELL, CELL, X, Y, CELL, CELL); continue; }
-          const m = this.faces(get, id, z, x, y);
-          if (!m) continue;
-          if (IS_OPAQUE[id]) covered = true;
-          if (m & 1) ctx.drawImage(atlas, CELL, id * CELL, CELL, CELL, X, Y, CELL, CELL);
-          if (m & 2) ctx.drawImage(atlas, 2 * CELL, id * CELL, CELL, CELL, X, Y, CELL, CELL);
-          if (m & 4) ctx.drawImage(atlas, 0, id * CELL, CELL, CELL, X, Y, CELL, CELL);
-          if (m & 8) ctx.drawImage(atlas, 3 * CELL, id * CELL, CELL, CELL, X, Y, CELL, CELL);
+          todo.push([s, z, x, y, id]);
         }
       }
     }
+    if (!todo.length) return false;
+    todo.sort((a, c) => a[0] - c[0] || a[1] - c[1]);
+    let covered = false;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(l + ox, t + oy, r - l, b - t);
+    ctx.clip();
+    for (const [, z, x, y, id] of todo) {
+      const X = (x - y) * 16 - 16 + ox, Y = (x + y) * 8 - (z + 1) * 16 + oy;
+      if (IS_CROSS[id]) { ctx.drawImage(atlas, 0, id * CELL, CELL, CELL, X, Y, CELL, CELL); continue; }
+      const m = this.faces(get, id, z, x, y);
+      if (!m) continue;
+      covered = true;
+      if (m & 1) ctx.drawImage(atlas, CELL, id * CELL, CELL, CELL, X, Y, CELL, CELL);
+      if (m & 2) ctx.drawImage(atlas, 2 * CELL, id * CELL, CELL, CELL, X, Y, CELL, CELL);
+      if (m & 4) ctx.drawImage(atlas, 0, id * CELL, CELL, CELL, X, Y, CELL, CELL);
+      if (m & 8) ctx.drawImage(atlas, 3 * CELL, id * CELL, CELL, CELL, X, Y, CELL, CELL);
+    }
+    ctx.restore();
     return covered;
   }
 

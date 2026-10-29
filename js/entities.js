@@ -128,7 +128,7 @@ export class Entity {
 
   updateRect() {
     const [sx, sy] = project(this.x, this.y, this.z);
-    const hh = this.height * 16 + 6, hw = this.rectW || 12;
+    const hh = this.height * 16 + 8, hw = (this.rectW || 12) + 3;
     this.rect = [sx - hw, sy - hh, sx + hw, sy + 4];
   }
 

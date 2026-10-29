@@ -1,5 +1,5 @@
 // Service worker : le jeu fonctionne hors ligne une fois chargé.
-const VERSION = 'mm-v2';
+const VERSION = 'mm-v3';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css', 'assets/monocraft.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
